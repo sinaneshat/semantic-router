@@ -7,7 +7,7 @@ Docker Compose stack. This directory contains everything Coolify needs:
 deploy/coolify/
 ├── docker-compose.yml      # Router + Envoy + Dashboard
 ├── config.yaml             # Routing config (Gemini backends)
-├── envoy/
+├── gateway/
 │   └── envoy.yaml          # Pre-rendered Envoy config (do not edit by hand)
 └── README.md
 ```
@@ -94,7 +94,7 @@ ENVOY_EXTPROC_ADDRESS=router \
 ENVOY_ROUTER_API_ADDRESS=router \
 .venv-coolify/bin/vllm-sr config envoy \
   --config deploy/coolify/config.yaml \
-  > deploy/coolify/envoy/envoy.yaml
+  > deploy/coolify/gateway/envoy.yaml
 
 .venv-coolify/bin/vllm-sr validate --config deploy/coolify/config.yaml
 ```

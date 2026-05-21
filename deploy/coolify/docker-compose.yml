@@ -14,7 +14,7 @@ services:
         source: ./config.yaml
         target: /app/config.yaml
       - type: bind
-        source: ./envoy/envoy.yaml
+        source: ./gateway/envoy.yaml
         target: /app/.vllm-sr/envoy.yaml
       - type: volume
         source: vsr-models
@@ -42,7 +42,7 @@ services:
       - "info"
     volumes:
       - type: bind
-        source: ./envoy/envoy.yaml
+        source: ./gateway/envoy.yaml
         target: /etc/envoy/envoy.yaml
     ulimits:
       nofile:
@@ -71,7 +71,7 @@ services:
         source: ./config.yaml
         target: /app/config.yaml
       - type: bind
-        source: ./envoy/envoy.yaml
+        source: ./gateway/envoy.yaml
         target: /app/.vllm-sr/envoy.yaml
       - type: volume
         source: vsr-dashboard-data
