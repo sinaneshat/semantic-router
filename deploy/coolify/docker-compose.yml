@@ -1,0 +1,85 @@
+services:
+  router:
+    image: ghcr.io/vllm-project/semantic-router/vllm-sr:latest
+    restart: unless-stopped
+    entrypoint: ["/app/start-router.sh"]
+    command: ["/app/config.yaml"]
+    environment:
+      - HF_HOME=/app/models
+      - HF_TOKEN=${HF_TOKEN:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:?}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - type: bind
+        source: ./config.yaml
+        target: /app/config.yaml
+      - type: bind
+        source: ./.vllm-sr
+        target: /app/.vllm-sr
+      - type: volume
+        source: vsr-models
+        target: /app/models
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 600s
+
+  envoy:
+    image: envoyproxy/envoy:v1.34-latest
+    restart: unless-stopped
+    depends_on:
+      router:
+        condition: service_healthy
+    command:
+      - "-c"
+      - "/etc/envoy/envoy.yaml"
+      - "--log-level"
+      - "info"
+    volumes:
+      - type: bind
+        source: ./.vllm-sr/envoy.yaml
+        target: /etc/envoy/envoy.yaml
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "8899:8899"
+
+  dashboard:
+    image: ghcr.io/vllm-project/semantic-router/dashboard:latest
+    restart: unless-stopped
+    depends_on:
+      - router
+      - envoy
+    environment:
+      - TARGET_ROUTER_API_URL=http://router:8080
+      - TARGET_ROUTER_METRICS_URL=http://router:9190/metrics
+      - TARGET_ENVOY_URL=http://envoy:8899
+      - TARGET_ENVOY_ADMIN_URL=http://envoy:9901
+      - ENVOY_EXTPROC_ADDRESS=router
+      - ENVOY_ROUTER_API_ADDRESS=router
+      - ROUTER_CONFIG_PATH=/app/config.yaml
+      - VLLM_SR_ENVOY_CONFIG_PATH=/app/.vllm-sr/envoy.yaml
+    volumes:
+      - type: bind
+        source: ./config.yaml
+        target: /app/config.yaml
+      - type: bind
+        source: ./.vllm-sr
+        target: /app/.vllm-sr
+      - type: volume
+        source: vsr-dashboard-data
+        target: /app/data
+    ports:
+      - "8700:8700"
+
+volumes:
+  vsr-models:
+  vsr-dashboard-data:
