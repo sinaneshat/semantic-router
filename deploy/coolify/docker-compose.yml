@@ -2,8 +2,47 @@ services:
   router:
     image: ghcr.io/vllm-project/semantic-router/vllm-sr:latest
     restart: unless-stopped
-    entrypoint: ["/app/start-router.sh"]
-    command: ["/app/config.yaml"]
+    # Custom entrypoint validates GEMINI_API_KEY against Gemini's
+    # OpenAI-compat endpoint before starting the router so the most
+    # common deploy failure (key not reaching runtime, or key invalid)
+    # surfaces immediately instead of as an opaque "404 -" in the
+    # dashboard Playground.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -u
+        if [ -z "$${GEMINI_API_KEY:-}" ]; then
+          echo "[FATAL] GEMINI_API_KEY is NOT set inside the router container."
+          echo "        Set it under Coolify -> Environment Variables for this"
+          echo "        application (mark it as Build + Runtime), then Redeploy."
+          exit 1
+        fi
+        echo "[boot] GEMINI_API_KEY is present (length=$${#GEMINI_API_KEY})"
+        code=$$(curl -sS -o /tmp/gemini_probe.json -w '%{http_code}' --max-time 10 -H "Authorization: Bearer $${GEMINI_API_KEY}" -H "Content-Type: application/json" -d '{"model":"gemini-3.1-flash-lite","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" || echo "probe-failed")
+        case "$$code" in
+          200)
+            echo "[boot] Gemini probe OK (HTTP 200) - key + model are valid."
+            ;;
+          401|403)
+            echo "[FATAL] Gemini rejected the API key (HTTP $$code):"
+            head -c 800 /tmp/gemini_probe.json; echo
+            echo "        Verify GEMINI_API_KEY in Coolify env vars."
+            exit 1
+            ;;
+          404)
+            echo "[FATAL] Gemini returned 404 for model gemini-3.1-flash-lite:"
+            head -c 800 /tmp/gemini_probe.json; echo
+            echo "        Either the model is not accessible from this key/region,"
+            echo "        or the provider_model_id in config.yaml is wrong."
+            exit 1
+            ;;
+          *)
+            echo "[warn] Gemini probe returned HTTP $$code - continuing, but expect failures:"
+            head -c 800 /tmp/gemini_probe.json; echo
+            ;;
+        esac
+        exec /app/start-router.sh /app/config.yaml
     environment:
       - HF_HOME=/app/models
       - HF_TOKEN=${HF_TOKEN:-}
@@ -67,7 +106,7 @@ services:
       # Distinct names trigger the dashboard's "split-container" status
       # path. That path uses HTTP /health and /ready probes (via
       # TARGET_ROUTER_API_URL / TARGET_ENVOY_ADMIN_URL) instead of
-      # running `supervisorctl` or `docker inspect` — neither of which
+      # running `supervisorctl` or `docker inspect` - neither of which
       # works inside the Coolify dashboard container. Without this,
       # the System page shows Router/Envoy as "Unknown".
       - VLLM_SR_ROUTER_CONTAINER_NAME=router

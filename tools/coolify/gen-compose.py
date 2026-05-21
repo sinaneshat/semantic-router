@@ -32,7 +32,67 @@ import subprocess
 import sys
 
 
-def indent(text: str, n: int) -> str:
+# Router startup probe. The literal `$` characters are written so that
+# Docker Compose's variable interpolation (which collapses `$$` to `$`)
+# leaves a valid shell script behind. See:
+# https://docs.docker.com/compose/compose-file/12-interpolation/
+#
+# After Compose interpolation, the script the container actually runs is:
+#
+#     set -u
+#     if [ -z "${GEMINI_API_KEY:-}" ]; then
+#         echo "[FATAL] ..."
+#         exit 1
+#     fi
+#     code=$(curl -sS ... )
+#     case "$code" in
+#         200) ... ;;
+#         401|403) ... ;;
+#         404) ... ;;
+#     esac
+#     exec /app/start-router.sh /app/config.yaml
+#
+# The probe makes the single most common Coolify failure mode (key not
+# propagated to the runtime, or key present but invalid for the
+# configured model) fail loudly at boot with a precise message, instead
+# of silently letting Gemini reject every chat request with the opaque
+# "API error: 404 -" the dashboard surfaces today.
+ROUTER_ENTRYPOINT_SCRIPT = r"""set -u
+if [ -z "$${GEMINI_API_KEY:-}" ]; then
+  echo "[FATAL] GEMINI_API_KEY is NOT set inside the router container."
+  echo "        Set it under Coolify -> Environment Variables for this"
+  echo "        application (mark it as Build + Runtime), then Redeploy."
+  exit 1
+fi
+echo "[boot] GEMINI_API_KEY is present (length=$${#GEMINI_API_KEY})"
+code=$$(curl -sS -o /tmp/gemini_probe.json -w '%{http_code}' --max-time 10 -H "Authorization: Bearer $${GEMINI_API_KEY}" -H "Content-Type: application/json" -d '{"model":"gemini-3.1-flash-lite","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions" || echo "probe-failed")
+case "$$code" in
+  200)
+    echo "[boot] Gemini probe OK (HTTP 200) - key + model are valid."
+    ;;
+  401|403)
+    echo "[FATAL] Gemini rejected the API key (HTTP $$code):"
+    head -c 800 /tmp/gemini_probe.json; echo
+    echo "        Verify GEMINI_API_KEY in Coolify env vars."
+    exit 1
+    ;;
+  404)
+    echo "[FATAL] Gemini returned 404 for model gemini-3.1-flash-lite:"
+    head -c 800 /tmp/gemini_probe.json; echo
+    echo "        Either the model is not accessible from this key/region,"
+    echo "        or the provider_model_id in config.yaml is wrong."
+    exit 1
+    ;;
+  *)
+    echo "[warn] Gemini probe returned HTTP $$code - continuing, but expect failures:"
+    head -c 800 /tmp/gemini_probe.json; echo
+    ;;
+esac
+exec /app/start-router.sh /app/config.yaml
+"""
+
+
+def indent_block(text: str, n: int) -> str:
     pad = " " * n
     return "\n".join(pad + line if line else line for line in text.splitlines())
 
@@ -41,7 +101,7 @@ def regenerate_envoy_yaml(repo_root: pathlib.Path, coolify_dir: pathlib.Path) ->
     cli = repo_root / ".venv-coolify" / "bin" / "vllm-sr"
     if not cli.exists():
         print(
-            f"warning: {cli} not found — skipping envoy.yaml regeneration. "
+            f"warning: {cli} not found - skipping envoy.yaml regeneration. "
             "Install with: python -m venv .venv-coolify && "
             ".venv-coolify/bin/pip install -e src/vllm-sr/",
             file=sys.stderr,
@@ -77,19 +137,23 @@ def regenerate_envoy_yaml(repo_root: pathlib.Path, coolify_dir: pathlib.Path) ->
     print(f"wrote {len(body):,} bytes -> deploy/coolify/gateway/envoy.yaml")
 
 
-def main() -> None:
-    repo_root = pathlib.Path(__file__).resolve().parents[2]
-    coolify_dir = repo_root / "deploy" / "coolify"
-    regenerate_envoy_yaml(repo_root, coolify_dir)
-    config_yaml = (coolify_dir / "config.yaml").read_text()
-    envoy_yaml = (coolify_dir / "gateway" / "envoy.yaml").read_text()
-
-    compose = f"""services:
+# Static compose template. Uses `{KEY}` placeholders that we fill with
+# str.format. Curly braces inside the YAML body are doubled (`{{`/`}}`)
+# so str.format passes them through unchanged.
+COMPOSE_TEMPLATE = """services:
   router:
     image: ghcr.io/vllm-project/semantic-router/vllm-sr:latest
     restart: unless-stopped
-    entrypoint: ["/app/start-router.sh"]
-    command: ["/app/config.yaml"]
+    # Custom entrypoint validates GEMINI_API_KEY against Gemini's
+    # OpenAI-compat endpoint before starting the router so the most
+    # common deploy failure (key not reaching runtime, or key invalid)
+    # surfaces immediately instead of as an opaque "404 -" in the
+    # dashboard Playground.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+{router_entrypoint_indented}
     environment:
       - HF_HOME=/app/models
       - HF_TOKEN=${{HF_TOKEN:-}}
@@ -153,7 +217,7 @@ def main() -> None:
       # Distinct names trigger the dashboard's "split-container" status
       # path. That path uses HTTP /health and /ready probes (via
       # TARGET_ROUTER_API_URL / TARGET_ENVOY_ADMIN_URL) instead of
-      # running `supervisorctl` or `docker inspect` — neither of which
+      # running `supervisorctl` or `docker inspect` - neither of which
       # works inside the Coolify dashboard container. Without this,
       # the System page shows Router/Envoy as "Unknown".
       - VLLM_SR_ROUTER_CONTAINER_NAME=router
@@ -190,11 +254,25 @@ volumes:
 configs:
   router_config:
     content: |
-{indent(config_yaml, 6)}
+{config_yaml_indented}
   envoy_config:
     content: |
-{indent(envoy_yaml, 6)}
+{envoy_yaml_indented}
 """
+
+
+def main() -> None:
+    repo_root = pathlib.Path(__file__).resolve().parents[2]
+    coolify_dir = repo_root / "deploy" / "coolify"
+    regenerate_envoy_yaml(repo_root, coolify_dir)
+    config_yaml = (coolify_dir / "config.yaml").read_text()
+    envoy_yaml = (coolify_dir / "gateway" / "envoy.yaml").read_text()
+
+    compose = COMPOSE_TEMPLATE.format(
+        router_entrypoint_indented=indent_block(ROUTER_ENTRYPOINT_SCRIPT, 8),
+        config_yaml_indented=indent_block(config_yaml, 6),
+        envoy_yaml_indented=indent_block(envoy_yaml, 6),
+    )
 
     out = coolify_dir / "docker-compose.yml"
     out.write_text(compose)
