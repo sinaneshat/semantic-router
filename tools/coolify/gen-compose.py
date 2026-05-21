@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""Regenerate deploy/coolify/docker-compose.yml with inlined config/envoy.
+
+Coolify's Docker Compose Build Pack does not reliably place repo files
+into the deploy workdir for bind mounts, so we inline both files via
+Docker's native `configs: { content: ... }` mechanism. This script is the
+single source of truth for keeping the inlined content in sync with the
+human-editable source files.
+
+Run from the repo root:
+
+    python3 tools/coolify/gen-compose.py
+"""
+
+from __future__ import annotations
+
+import pathlib
+
+
+def indent(text: str, n: int) -> str:
+    pad = " " * n
+    return "\n".join(pad + line if line else line for line in text.splitlines())
+
+
+def main() -> None:
+    repo_root = pathlib.Path(__file__).resolve().parents[2]
+    coolify_dir = repo_root / "deploy" / "coolify"
+    config_yaml = (coolify_dir / "config.yaml").read_text()
+    envoy_yaml = (coolify_dir / "gateway" / "envoy.yaml").read_text()
+
+    compose = f"""services:
+  router:
+    image: ghcr.io/vllm-project/semantic-router/vllm-sr:latest
+    restart: unless-stopped
+    entrypoint: ["/app/start-router.sh"]
+    command: ["/app/config.yaml"]
+    environment:
+      - HF_HOME=/app/models
+      - HF_TOKEN=${{HF_TOKEN:-}}
+      - GEMINI_API_KEY=${{GEMINI_API_KEY:?}}
+      - LOG_LEVEL=${{LOG_LEVEL:-info}}
+    configs:
+      - source: router_config
+        target: /app/config.yaml
+      - source: envoy_config
+        target: /app/.vllm-sr/envoy.yaml
+    volumes:
+      - type: volume
+        source: vsr-models
+        target: /app/models
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz || curl -fsS http://localhost:9190/metrics || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 900s
+
+  envoy:
+    image: envoyproxy/envoy:v1.34-latest
+    restart: unless-stopped
+    depends_on:
+      - router
+    command:
+      - "-c"
+      - "/etc/envoy/envoy.yaml"
+      - "--log-level"
+      - "info"
+    configs:
+      - source: envoy_config
+        target: /etc/envoy/envoy.yaml
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "8899:8899"
+
+  dashboard:
+    image: ghcr.io/vllm-project/semantic-router/dashboard:latest
+    restart: unless-stopped
+    depends_on:
+      - router
+      - envoy
+    environment:
+      - TARGET_ROUTER_API_URL=http://router:8080
+      - TARGET_ROUTER_METRICS_URL=http://router:9190/metrics
+      - TARGET_ENVOY_URL=http://envoy:8899
+      - TARGET_ENVOY_ADMIN_URL=http://envoy:9901
+      - ENVOY_EXTPROC_ADDRESS=router
+      - ENVOY_ROUTER_API_ADDRESS=router
+      - ROUTER_CONFIG_PATH=/app/config.yaml
+      - VLLM_SR_ENVOY_CONFIG_PATH=/app/.vllm-sr/envoy.yaml
+    configs:
+      - source: router_config
+        target: /app/config.yaml
+      - source: envoy_config
+        target: /app/.vllm-sr/envoy.yaml
+    volumes:
+      - type: volume
+        source: vsr-dashboard-data
+        target: /app/data
+    ports:
+      - "8700:8700"
+
+volumes:
+  vsr-models:
+  vsr-dashboard-data:
+
+configs:
+  router_config:
+    content: |
+{indent(config_yaml, 6)}
+  envoy_config:
+    content: |
+{indent(envoy_yaml, 6)}
+"""
+
+    out = coolify_dir / "docker-compose.yml"
+    out.write_text(compose)
+    print(f"wrote {len(compose):,} bytes -> {out.relative_to(repo_root)}")
+
+
+if __name__ == "__main__":
+    main()

@@ -5,12 +5,18 @@ Docker Compose stack. This directory contains everything Coolify needs:
 
 ```
 deploy/coolify/
-├── docker-compose.yml      # Router + Envoy + Dashboard
-├── config.yaml             # Routing config (Gemini backends)
+├── docker-compose.yml      # Router + Envoy + Dashboard (self-contained)
+├── config.yaml             # Routing config source-of-truth (mirror of inlined content)
 ├── gateway/
-│   └── envoy.yaml          # Pre-rendered Envoy config (do not edit by hand)
+│   └── envoy.yaml          # Pre-rendered Envoy config (mirror of inlined content)
 └── README.md
 ```
+
+> Both `config.yaml` and `gateway/envoy.yaml` are **inlined inside `docker-compose.yml`**
+> as Docker `configs:` with `content:` blocks. This avoids Coolify's bind-mount
+> path-resolution issues. The standalone files are kept as the human-editable
+> source of truth — when you change them, regenerate the compose file (see
+> "Updating the configuration" below) and commit all three.
 
 ## What is deployed
 
@@ -83,23 +89,30 @@ The router classifies the incoming prompt and chooses between
 
 ## Updating the configuration
 
-Edit `config.yaml`, then regenerate the Envoy config locally:
+Edit `config.yaml`, then regenerate **both** the Envoy config and the inlined
+compose file:
 
 ```bash
 # From the repo root
 python -m venv .venv-coolify
 .venv-coolify/bin/pip install -e src/vllm-sr/
 
+# 1. Regenerate envoy config (and strip log noise)
 ENVOY_EXTPROC_ADDRESS=router \
 ENVOY_ROUTER_API_ADDRESS=router \
 .venv-coolify/bin/vllm-sr config envoy \
   --config deploy/coolify/config.yaml \
-  > deploy/coolify/gateway/envoy.yaml
+  | tail -n +17 > deploy/coolify/gateway/envoy.yaml
 
+# 2. Validate
 .venv-coolify/bin/vllm-sr validate --config deploy/coolify/config.yaml
+
+# 3. Rebuild compose with new inlined content
+python3 tools/coolify/gen-compose.py
 ```
 
-Commit, push, then **Redeploy** in Coolify.
+Commit `config.yaml`, `gateway/envoy.yaml`, and `docker-compose.yml`, push,
+then **Redeploy** in Coolify.
 
 ## Recommended Hetzner server
 

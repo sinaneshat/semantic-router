@@ -1,19 +1,3 @@
-2026-05-21 16:44:17,651 - INFO - Configuration parsed successfully
-2026-05-21 16:44:17,652 - INFO -   Version: v0.3
-2026-05-21 16:44:17,652 - INFO -   Listeners: 1
-2026-05-21 16:44:17,652 - INFO -   Decisions: 9
-2026-05-21 16:44:17,652 - INFO -   Models: 2
-2026-05-21 16:44:17,652 - INFO - Validating user configuration...
-2026-05-21 16:44:17,652 - INFO - Configuration validation passed
-2026-05-21 16:44:17,653 - INFO - Generating Envoy config...
-2026-05-21 16:44:17,653 - INFO -   Listeners:
-2026-05-21 16:44:17,653 - INFO -     - http-8899: 0.0.0.0:8899
-2026-05-21 16:44:17,653 - INFO -   Found 2 vLLM model(s):
-2026-05-21 16:44:17,653 - INFO -     - google/gemini-3.1-flash-lite (cluster: google_gemini_3.1_flash_lite)
-2026-05-21 16:44:17,653 - INFO -         - gemini: generativelanguage.googleapis.com:443 (weight: 100)
-2026-05-21 16:44:17,653 - INFO -     - google/gemini-3.5-flash (cluster: google_gemini_3.5_flash)
-2026-05-21 16:44:17,653 - INFO -         - gemini: generativelanguage.googleapis.com:443 (weight: 100)
-2026-05-21 16:44:17,660 - INFO - Generated Envoy config: /var/folders/w7/522hksm537q08hft7qtjr3t80000gn/T/tmpylel1h7h.yaml
 admin:
   address:
     socket_address:
