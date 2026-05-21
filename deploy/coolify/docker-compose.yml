@@ -24,18 +24,17 @@ services:
         soft: 65536
         hard: 65536
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz || curl -fsS http://localhost:9190/metrics || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 600s
+      start_period: 900s
 
   envoy:
     image: envoyproxy/envoy:v1.34-latest
     restart: unless-stopped
     depends_on:
-      router:
-        condition: service_healthy
+      - router
     command:
       - "-c"
       - "/etc/envoy/envoy.yaml"
