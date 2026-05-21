@@ -96,27 +96,27 @@ The router classifies the incoming prompt and chooses between
 
 ## Updating the configuration
 
-Edit `config.yaml`, then regenerate **both** the Envoy config and the inlined
-compose file:
+Edit `config.yaml`, then run a single regen command:
 
 ```bash
-# From the repo root
+# From the repo root (one-time venv setup)
 python -m venv .venv-coolify
 .venv-coolify/bin/pip install -e src/vllm-sr/
 
-# 1. Regenerate envoy config (and strip log noise)
-ENVOY_EXTPROC_ADDRESS=router \
-ENVOY_ROUTER_API_ADDRESS=router \
-.venv-coolify/bin/vllm-sr config envoy \
-  --config deploy/coolify/config.yaml \
-  | tail -n +17 > deploy/coolify/gateway/envoy.yaml
-
-# 2. Validate
-.venv-coolify/bin/vllm-sr validate --config deploy/coolify/config.yaml
-
-# 3. Rebuild compose with new inlined content
+# Regenerate gateway/envoy.yaml and re-inline both files into docker-compose.yml
 python3 tools/coolify/gen-compose.py
+
+# (Optional) Validate the result
+.venv-coolify/bin/vllm-sr validate --config deploy/coolify/config.yaml
+GEMINI_API_KEY=test docker compose -f deploy/coolify/docker-compose.yml config --quiet
 ```
+
+The script:
+
+1. Re-renders `gateway/envoy.yaml` from `config.yaml` using `vllm-sr config envoy`.
+2. Strips the CLI's log preamble and rewrites the access-log path to `/dev/stdout`
+   (the non-root `envoyproxy/envoy` image cannot write to `/var/log/...`).
+3. Inlines both files into `docker-compose.yml` via Docker `configs:`.
 
 Commit `config.yaml`, `gateway/envoy.yaml`, and `docker-compose.yml`, push,
 then **Redeploy** in Coolify.
@@ -129,12 +129,14 @@ default sweet spot. See the top-level deployment discussion for sizing details.
 
 ## Troubleshooting
 
-| Symptom                                         | Fix                                                                                            |
-|-------------------------------------------------|------------------------------------------------------------------------------------------------|
-| Router unhealthy for first 5–10 min             | Expected — model download. Watch `docker logs <router>`.                                       |
-| `No classifier initialized` after first deploy  | One-time. Restart `router` service in Coolify UI after model download finishes.                |
-| 502 from API domain                             | Verify `envoy` is healthy and domain uses port `:8899`.                                        |
-| Dashboard can't reach router                    | Confirm all `TARGET_*` env vars use service names.                                             |
-| `GEMINI_API_KEY` errors at startup              | Set the secret in Coolify and redeploy.                                                        |
-| Config change not picked up                     | Regenerate `envoy.yaml` and redeploy.                                                          |
-| `is a directory` / `not a directory` mount errs | Compose now inlines configs — should be impossible. If it happens, regen via `gen-compose.py`. |
+| Symptom                                                       | Fix                                                                                                                                                                                                                              |
+|---------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Router unhealthy for first 5–10 min                           | Expected — HuggingFace model download (~1.5 GB). Watch `docker logs <router>`.                                                                                                                                                  |
+| `No classifier initialized` after first deploy                | One-time race during model auto-discovery. Usually self-corrects within ~30 s; if not, restart `router` in Coolify UI.                                                                                                          |
+| 502 from API domain                                           | Verify `envoy` is healthy and the public domain forwards to `:8899`.                                                                                                                                                            |
+| Dashboard Playground returns `404`                            | Almost always an invalid `provider_model_id` in `config.yaml`. The Gemini API at `generativelanguage.googleapis.com` accepts bare names (`gemini-3.1-flash-lite`, `gemini-3.5-flash`) — **not** `google/...` (Vertex AI only).  |
+| Dashboard System page shows Router/Envoy `Unknown`            | The dashboard needs the `VLLM_SR_*_CONTAINER_NAME` env vars set to distinct values so it uses HTTP probes instead of `supervisorctl`. These are already in the generated compose.                                              |
+| Dashboard can't reach router                                  | Confirm all `TARGET_*` env vars use service names (`router`, `envoy`).                                                                                                                                                          |
+| `GEMINI_API_KEY` errors at startup                            | Set the secret in Coolify and redeploy.                                                                                                                                                                                         |
+| Config change not picked up                                   | Re-run `python3 tools/coolify/gen-compose.py`, commit all three files, redeploy.                                                                                                                                                |
+| `is a directory` / `not a directory` mount errs               | Compose inlines configs — should be impossible. If it recurs, run the regen script and redeploy.                                                                                                                                |

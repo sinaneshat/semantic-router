@@ -8,15 +8,15 @@ listeners:
 
 providers:
   defaults:
-    default_model: google/gemini-3.1-flash-lite
+    default_model: gemini-3.1-flash-lite
     default_reasoning_effort: medium
     reasoning_families:
       anthropic:
         type: reasoning_effort
         parameter: reasoning.effort
   models:
-    - name: google/gemini-3.1-flash-lite
-      provider_model_id: google/gemini-3.1-flash-lite
+    - name: gemini-3.1-flash-lite
+      provider_model_id: gemini-3.1-flash-lite
       backend_refs:
         - name: gemini
           base_url: https://generativelanguage.googleapis.com/v1beta/openai
@@ -24,8 +24,8 @@ providers:
           api_key_env: GEMINI_API_KEY
           weight: 100
 
-    - name: google/gemini-3.5-flash
-      provider_model_id: google/gemini-3.5-flash
+    - name: gemini-3.5-flash
+      provider_model_id: gemini-3.5-flash
       backend_refs:
         - name: gemini
           base_url: https://generativelanguage.googleapis.com/v1beta/openai
@@ -35,10 +35,10 @@ providers:
 
 routing:
   modelCards:
-    - name: google/gemini-3.1-flash-lite
-      description: Lightweight default model for general traffic, translation, science, trivia, summarization, and chitchat.
-    - name: google/gemini-3.5-flash
-      description: Stronger model used for coding and copywriting routes.
+    - name: gemini-3.1-flash-lite
+      description: Lightweight low-latency default model for general traffic, translation, science, trivia, summarization, and chitchat.
+    - name: gemini-3.5-flash
+      description: Stronger Flash model used for coding and copywriting routes.
 
   signals:
     jailbreak:
@@ -257,7 +257,7 @@ routing:
           - type: jailbreak
             name: jailbreak_standard
       modelRefs:
-        - model: google/gemini-3.1-flash-lite
+        - model: gemini-3.1-flash-lite
           use_reasoning: false
       plugins:
         - type: system_prompt
@@ -287,7 +287,7 @@ routing:
           - type: domain
             name: computer science
       modelRefs:
-        - model: google/gemini-3.5-flash
+        - model: gemini-3.5-flash
           use_reasoning: false
       plugins:
         - type: system_prompt
@@ -315,7 +315,7 @@ routing:
           - type: keyword
             name: copywriting_markers
       modelRefs:
-        - model: google/gemini-3.5-flash
+        - model: gemini-3.5-flash
           use_reasoning: false
       plugins:
         - type: system_prompt
@@ -343,7 +343,7 @@ routing:
           - type: keyword
             name: translate_markers
       modelRefs:
-        - model: google/gemini-3.1-flash-lite
+        - model: gemini-3.1-flash-lite
           use_reasoning: false
       plugins:
         - type: system_prompt
@@ -377,7 +377,7 @@ routing:
           - type: domain
             name: math
       modelRefs:
-        - model: google/gemini-3.1-flash-lite
+        - model: gemini-3.1-flash-lite
           use_reasoning: false
       plugins:
         - type: system_prompt
@@ -405,7 +405,7 @@ routing:
           - type: keyword
             name: trivia_markers
       modelRefs:
-        - model: google/gemini-3.1-flash-lite
+        - model: gemini-3.1-flash-lite
           use_reasoning: false
       plugins:
         - type: system_prompt
@@ -432,7 +432,7 @@ routing:
           - type: keyword
             name: summarize_markers
       modelRefs:
-        - model: google/gemini-3.1-flash-lite
+        - model: gemini-3.1-flash-lite
           use_reasoning: false
       plugins:
         - type: system_prompt
@@ -458,7 +458,7 @@ routing:
           - type: embedding
             name: chitchat
       modelRefs:
-        - model: google/gemini-3.1-flash-lite
+        - model: gemini-3.1-flash-lite
           use_reasoning: false
       plugins:
         - type: system_prompt
@@ -484,7 +484,7 @@ routing:
       rules:
         operator: AND
       modelRefs:
-        - model: google/gemini-3.1-flash-lite
+        - model: gemini-3.1-flash-lite
           use_reasoning: false
       plugins:
         - type: system_prompt

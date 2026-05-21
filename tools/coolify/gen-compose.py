@@ -7,14 +7,29 @@ Docker's native `configs: { content: ... }` mechanism. This script is the
 single source of truth for keeping the inlined content in sync with the
 human-editable source files.
 
+Workflow:
+
+1. Re-renders `gateway/envoy.yaml` from `config.yaml` via the vllm-sr CLI.
+2. Strips the CLI's stdout log preamble that leaks into the file.
+3. Rewrites the Envoy access-log path from `/var/log/envoy_access.log`
+   (not writable by the non-root envoyproxy/envoy container) to
+   `/dev/stdout` so request logs surface in Coolify's container view.
+4. Inlines both files into `docker-compose.yml` as Docker `configs:`
+   with `content: |` blocks.
+
 Run from the repo root:
 
     python3 tools/coolify/gen-compose.py
+
+Requires `.venv-coolify/bin/vllm-sr` to be installed (see the README).
 """
 
 from __future__ import annotations
 
 import pathlib
+import re
+import subprocess
+import sys
 
 
 def indent(text: str, n: int) -> str:
@@ -22,9 +37,50 @@ def indent(text: str, n: int) -> str:
     return "\n".join(pad + line if line else line for line in text.splitlines())
 
 
+def regenerate_envoy_yaml(repo_root: pathlib.Path, coolify_dir: pathlib.Path) -> None:
+    cli = repo_root / ".venv-coolify" / "bin" / "vllm-sr"
+    if not cli.exists():
+        print(
+            f"warning: {cli} not found — skipping envoy.yaml regeneration. "
+            "Install with: python -m venv .venv-coolify && "
+            ".venv-coolify/bin/pip install -e src/vllm-sr/",
+            file=sys.stderr,
+        )
+        return
+
+    proc = subprocess.run(
+        [
+            str(cli),
+            "config",
+            "envoy",
+            "--config",
+            str(coolify_dir / "config.yaml"),
+        ],
+        env={
+            "ENVOY_EXTPROC_ADDRESS": "router",
+            "ENVOY_ROUTER_API_ADDRESS": "router",
+            "PATH": "/usr/bin:/bin:/usr/local/bin",
+        },
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    body = "\n".join(
+        line for line in proc.stdout.splitlines() if not re.match(r"^\d{4}-\d{2}-\d{2}", line)
+    )
+    body = body.replace("/var/log/envoy_access.log", "/dev/stdout")
+    if not body.endswith("\n"):
+        body += "\n"
+
+    (coolify_dir / "gateway" / "envoy.yaml").write_text(body)
+    print(f"wrote {len(body):,} bytes -> deploy/coolify/gateway/envoy.yaml")
+
+
 def main() -> None:
     repo_root = pathlib.Path(__file__).resolve().parents[2]
     coolify_dir = repo_root / "deploy" / "coolify"
+    regenerate_envoy_yaml(repo_root, coolify_dir)
     config_yaml = (coolify_dir / "config.yaml").read_text()
     envoy_yaml = (coolify_dir / "gateway" / "envoy.yaml").read_text()
 
@@ -53,7 +109,7 @@ def main() -> None:
         soft: 65536
         hard: 65536
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/healthz || curl -fsS http://localhost:9190/metrics || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || curl -fsS http://localhost:9190/metrics || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -94,6 +150,15 @@ def main() -> None:
       - ENVOY_ROUTER_API_ADDRESS=router
       - ROUTER_CONFIG_PATH=/app/config/config.yaml
       - VLLM_SR_ENVOY_CONFIG_PATH=/app/.vllm-sr/envoy.yaml
+      # Distinct names trigger the dashboard's "split-container" status
+      # path. That path uses HTTP /health and /ready probes (via
+      # TARGET_ROUTER_API_URL / TARGET_ENVOY_ADMIN_URL) instead of
+      # running `supervisorctl` or `docker inspect` — neither of which
+      # works inside the Coolify dashboard container. Without this,
+      # the System page shows Router/Envoy as "Unknown".
+      - VLLM_SR_ROUTER_CONTAINER_NAME=router
+      - VLLM_SR_ENVOY_CONTAINER_NAME=envoy
+      - VLLM_SR_DASHBOARD_CONTAINER_NAME=dashboard
     configs:
       - source: router_config
         target: /app/config/config.yaml

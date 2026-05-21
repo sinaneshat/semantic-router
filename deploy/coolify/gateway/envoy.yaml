@@ -36,15 +36,15 @@ static_resources:
               - "x-authz-user-groups"
               routes:
               
-              # Route for model: google/gemini-3.1-flash-lite
+              # Route for model: gemini-3.1-flash-lite
               - match:
                   prefix: "/"
                   headers:
                   - name: x-selected-model
                     string_match:
-                      exact: "google/gemini-3.1-flash-lite"
+                      exact: "gemini-3.1-flash-lite"
                 route:
-                  cluster: google_gemini_3.1_flash_lite_cluster
+                  cluster: gemini_3.1_flash_lite_cluster
                   timeout: 300s
                   idleTimeout: 1200s
                   # Rewrite Host header to match upstream server
@@ -58,15 +58,15 @@ static_resources:
                     substitution: "/v1beta/openai\\1"
                   
               
-              # Route for model: google/gemini-3.5-flash
+              # Route for model: gemini-3.5-flash
               - match:
                   prefix: "/"
                   headers:
                   - name: x-selected-model
                     string_match:
-                      exact: "google/gemini-3.5-flash"
+                      exact: "gemini-3.5-flash"
                 route:
-                  cluster: google_gemini_3.5_flash_cluster
+                  cluster: gemini_3.5_flash_cluster
                   timeout: 300s
                   idleTimeout: 1200s
                   # Rewrite Host header to match upstream server
@@ -87,7 +87,7 @@ static_resources:
                 route:
                   
                   # Route to first model by default
-                  cluster: google_gemini_3.1_flash_lite_cluster
+                  cluster: gemini_3.1_flash_lite_cluster
                   
                   timeout: 300s
                   
@@ -155,8 +155,8 @@ static_resources:
   
 
   
-  # Cluster for model: google/gemini-3.1-flash-lite
-  - name: google_gemini_3.1_flash_lite_cluster
+  # Cluster for model: gemini-3.1-flash-lite
+  - name: gemini_3.1_flash_lite_cluster
     connect_timeout: 1200s
     type: LOGICAL_DNS
     
@@ -164,7 +164,7 @@ static_resources:
     
     lb_policy: ROUND_ROBIN
     load_assignment:
-      cluster_name: google_gemini_3.1_flash_lite_cluster
+      cluster_name: gemini_3.1_flash_lite_cluster
       endpoints:
       - lb_endpoints:
         
@@ -190,8 +190,8 @@ static_resources:
             tls_maximum_protocol_version: TLSv1_3
     
   
-  # Cluster for model: google/gemini-3.5-flash
-  - name: google_gemini_3.5_flash_cluster
+  # Cluster for model: gemini-3.5-flash
+  - name: gemini_3.5_flash_cluster
     connect_timeout: 1200s
     type: LOGICAL_DNS
     
@@ -199,7 +199,7 @@ static_resources:
     
     lb_policy: ROUND_ROBIN
     load_assignment:
-      cluster_name: google_gemini_3.5_flash_cluster
+      cluster_name: gemini_3.5_flash_cluster
       endpoints:
       - lb_endpoints:
         
