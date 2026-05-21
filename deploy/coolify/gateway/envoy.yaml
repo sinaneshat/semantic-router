@@ -103,6 +103,20 @@ static_resources:
                     substitution: "/v1beta/openai\\1"
                   
           http_filters:
+          # Strip client-provided Authorization headers BEFORE ExtProc runs.
+          # Without this, the dashboard forwards its own session token as
+          # Authorization, ExtProc appends the Gemini key, Gemini receives
+          # two Authorization values, and every request fails with an
+          # empty-body HTTP 404. See tools/coolify/gen-compose.py for the
+          # full root-cause writeup.
+          - name: envoy.filters.http.lua
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+              default_source_code:
+                inline_string: |
+                  function envoy_on_request(handle)
+                    handle:headers():remove("authorization")
+                  end
           
           - name: envoy.filters.http.ext_proc
             typed_config:
