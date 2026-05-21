@@ -57,7 +57,14 @@ so Coolify will refuse to deploy until it is set.
 
 > First start downloads ~1.5 GB of classifier models — allow 5–10 minutes for
 > the router to become healthy. Coolify's healthcheck respects this via
-> `start_period: 600s`.
+> `start_period: 900s`.
+>
+> **First-deploy caveat:** the router's classifier auto-discovery runs once at
+> startup, before the model download finishes. After the first successful
+> deploy you'll see a one-time `No classifier initialized. Using placeholder
+> service.` warning. **Restart the router service once from the Coolify UI**
+> after models finish downloading — subsequent restarts pick up the cached
+> models from the `vsr-models` volume and initialize the classifier normally.
 
 ## Deploy via Service Stack (no Git)
 
@@ -122,10 +129,12 @@ default sweet spot. See the top-level deployment discussion for sizing details.
 
 ## Troubleshooting
 
-| Symptom                              | Fix                                                       |
-|--------------------------------------|-----------------------------------------------------------|
-| Router unhealthy for first 5–10 min  | Expected — model download. Watch `docker logs <router>`. |
-| 502 from API domain                  | Verify `envoy` is healthy and domain uses port `:8899`.  |
-| Dashboard can't reach router         | Confirm all `TARGET_*` env vars use service names.       |
-| `GEMINI_API_KEY` errors at startup   | Set the secret in Coolify and redeploy.                  |
-| Config change not picked up          | Regenerate `envoy.yaml` and redeploy.                    |
+| Symptom                                         | Fix                                                                                            |
+|-------------------------------------------------|------------------------------------------------------------------------------------------------|
+| Router unhealthy for first 5–10 min             | Expected — model download. Watch `docker logs <router>`.                                       |
+| `No classifier initialized` after first deploy  | One-time. Restart `router` service in Coolify UI after model download finishes.                |
+| 502 from API domain                             | Verify `envoy` is healthy and domain uses port `:8899`.                                        |
+| Dashboard can't reach router                    | Confirm all `TARGET_*` env vars use service names.                                             |
+| `GEMINI_API_KEY` errors at startup              | Set the secret in Coolify and redeploy.                                                        |
+| Config change not picked up                     | Regenerate `envoy.yaml` and redeploy.                                                          |
+| `is a directory` / `not a directory` mount errs | Compose now inlines configs — should be impossible. If it happens, regen via `gen-compose.py`. |

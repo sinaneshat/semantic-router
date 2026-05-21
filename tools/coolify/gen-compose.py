@@ -92,17 +92,29 @@ def main() -> None:
       - TARGET_ENVOY_ADMIN_URL=http://envoy:9901
       - ENVOY_EXTPROC_ADDRESS=router
       - ENVOY_ROUTER_API_ADDRESS=router
-      - ROUTER_CONFIG_PATH=/app/config.yaml
+      - ROUTER_CONFIG_PATH=/app/config/config.yaml
       - VLLM_SR_ENVOY_CONFIG_PATH=/app/.vllm-sr/envoy.yaml
     configs:
       - source: router_config
-        target: /app/config.yaml
+        target: /app/config/config.yaml
       - source: envoy_config
         target: /app/.vllm-sr/envoy.yaml
     volumes:
       - type: volume
         source: vsr-dashboard-data
         target: /app/data
+    # Override entrypoint so we can fix volume ownership before the
+    # image's entrypoint switches to the non-root user. Fresh named
+    # volumes are root-owned by default, and the dashboard backend runs
+    # as UID 65532 (nonroot) and needs to write its SQLite databases
+    # under /app/data.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /app/data /app/data/results /app/data/ml-pipeline
+        chown -R 65532:65532 /app/data 2>/dev/null || true
+        exec /app/entrypoint.sh /app/dashboard-backend -port=8700 -static=/app/frontend -config=/app/config/config.yaml
     ports:
       - "8700:8700"
 
