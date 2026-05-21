@@ -505,6 +505,18 @@ routing:
             max_records: 100000
 
 global:
+  services:
+    # The Coolify deployment only ships the router, envoy, and dashboard.
+    # Override the default `postgres` and `redis` store backends so the
+    # router does not crash trying to connect to services we do not run.
+    # Routing-decision replay records and OpenAI Response API history are
+    # therefore ephemeral — they are lost on router restart. To enable
+    # durable storage, add a Redis or Postgres service and set the
+    # corresponding store backend + connection config here.
+    router_replay:
+      store_backend: memory
+    response_api:
+      enabled: false
   model_catalog:
     embeddings:
       semantic:
@@ -520,9 +532,7 @@ global:
             best_weight: 0.75
             top_m: 2
             margin_threshold: 0.05
-    modules:
-      prompt_guard:
-        jailbreak:
-          enabled: true
-        pii:
-          enabled: true
+    # `modules.prompt_guard` intentionally omitted — the router's built-in
+    # defaults already enable mmBERT-32K jailbreak detection on CPU with
+    # threshold 0.7 and the correct mapping file, which is exactly what we
+    # want for this CPU-only deployment.
