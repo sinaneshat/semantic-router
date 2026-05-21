@@ -517,6 +517,14 @@ global:
       store_backend: memory
     response_api:
       enabled: false
+    # Disable distributed tracing. The router's default tracing config
+    # pushes spans via OTLP to `vllm-sr-jaeger:4317`, but Jaeger is not
+    # part of this Coolify stack, so every export attempt fails with a
+    # DNS lookup error and floods the router logs every ~10s. Prometheus
+    # metrics are left on (Coolify can scrape :9190/metrics directly).
+    observability:
+      tracing:
+        enabled: false
   model_catalog:
     embeddings:
       semantic:
