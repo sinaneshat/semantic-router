@@ -8,15 +8,15 @@ listeners:
 
 providers:
   defaults:
-    default_model: google/gemini-2.5-flash-lite
+    default_model: google/gemini-3.1-flash-lite
     default_reasoning_effort: medium
     reasoning_families:
       anthropic:
         type: reasoning_effort
         parameter: reasoning.effort
   models:
-    - name: google/gemini-2.5-flash-lite
-      provider_model_id: google/gemini-2.5-flash-lite
+    - name: google/gemini-3.1-flash-lite
+      provider_model_id: google/gemini-3.1-flash-lite
       backend_refs:
         - name: gemini
           base_url: https://generativelanguage.googleapis.com/v1beta/openai
@@ -24,24 +24,13 @@ providers:
           api_key_env: GEMINI_API_KEY
           weight: 100
 
-    - name: anthropic/claude-opus-4.6
-      api_format: anthropic
-      reasoning_family: anthropic
-      provider_model_id: claude-opus-4-20250514
+    - name: google/gemini-3.5-flash
+      provider_model_id: google/gemini-3.5-flash
       backend_refs:
-        - name: anthropic
-          base_url: https://api.anthropic.com
-          provider: anthropic
-          api_key_env: ANTHROPIC_API_KEY
-          weight: 100
-
-    - name: your-coding-model
-      provider_model_id: your-coding-model-id
-      backend_refs:
-        - name: coding-backend
-          base_url: https://api.your-provider.com/v1
-          provider: openai
-          api_key_env: CODING_API_KEY
+        - name: gemini
+          base_url: https://generativelanguage.googleapis.com/v1beta/openai
+          provider: gemini
+          api_key_env: GEMINI_API_KEY
           weight: 100
 
 routing:
@@ -74,24 +63,86 @@ routing:
           - کامپوننت
           - کوئری
 
-      - name: reasoning_markers
+      - name: copywriting_markers
         operator: OR
         case_sensitive: false
         keywords:
-          - گام به گام
-          - step by step
-          - تحلیل کن
-          - analyze
-          - مقایسه کن
-          - compare
-          - trade-off
-          - tradeoff
-          - ثابت کن
-          - prove
-          - ریشه‌یابی
-          - root cause
-          - از اول اصول
-          - first principles
+          - copywriting
+          - marketing copy
+          - ad copy
+          - headline
+          - tagline
+          - blog post
+          - landing page
+          - product description
+          - social media post
+          - email campaign
+          - call to action
+          - CTA
+          - متن تبلیغاتی
+          - کپی‌رایتینگ
+          - شعار
+          - محتوای بازاریابی
+
+      - name: translate_markers
+        operator: OR
+        case_sensitive: false
+        keywords:
+          - translate
+          - translation
+          - ترجمه
+          - به انگلیسی
+          - به فارسی
+          - to English
+          - to Farsi
+          - to Persian
+          - in English
+          - in Farsi
+
+      - name: trivia_markers
+        operator: OR
+        case_sensitive: false
+        keywords:
+          - trivia
+          - fun fact
+          - quiz
+          - did you know
+          - random fact
+          - جواب کوییز
+          - سوال تستی
+          - اطلاعات جالب
+
+      - name: summarize_markers
+        operator: OR
+        case_sensitive: false
+        keywords:
+          - summarize
+          - summary
+          - TLDR
+          - tl;dr
+          - key points
+          - bullet points
+          - خلاصه
+          - خلاصه کن
+          - نکات کلیدی
+          - condense
+
+    domains:
+      - name: biology
+        description: Biology and life-science related queries.
+        mmlu_categories: [biology]
+      - name: chemistry
+        description: Chemistry and molecular science questions.
+        mmlu_categories: [chemistry]
+      - name: physics
+        description: Physics and physical-science reasoning prompts.
+        mmlu_categories: [physics]
+      - name: math
+        description: Mathematics, proofs, and quantitative reasoning tasks.
+        mmlu_categories: [math]
+      - name: computer science
+        description: Computer science and software engineering prompts.
+        mmlu_categories: ["computer science"]
 
     embeddings:
       - name: coding
@@ -103,15 +154,71 @@ routing:
           - این کامپوننت React رو رفکتور کن
           - stack trace رو تحلیل کن و بگو مشکل از کجاست
           - این کوئری SQL رو بهینه کن
-          - برای این کلاس تست یونیت بنویس
-          - چرا async/await من کار نمی‌کنه؟
-          - endpoint این API رو برام پیاده‌سازی کن
           - fix this bug in my Python code
           - write a function to parse JSON
           - refactor this React component
           - debug this stack trace and explain the root cause
           - optimize this SQL query
-          - write unit tests for this class
+
+      - name: copywriting
+        threshold: 0.72
+        aggregation_method: max
+        candidates:
+          - write marketing copy for our new product launch
+          - draft a compelling email subject line and body
+          - create social media captions for Instagram
+          - write a landing page headline and subhead
+          - improve this product description for conversions
+          - یک متن تبلیغاتی جذاب برای محصول بنویس
+          - یک ایمیل بازاریابی حرفه‌ای بنویس
+          - کپشن اینستاگرام برای کمپین جدید بنویس
+
+      - name: translate
+        threshold: 0.74
+        aggregation_method: max
+        candidates:
+          - translate this paragraph to English
+          - translate the following text to Farsi
+          - how do you say this in Persian?
+          - convert this sentence to formal English
+          - این متن رو به انگلیسی ترجمه کن
+          - این جمله رو به فارسی روان بنویس
+          - معادل انگلیسی این عبارت چیه؟
+
+      - name: science
+        threshold: 0.74
+        aggregation_method: max
+        candidates:
+          - explain photosynthesis step by step
+          - what is the difference between mitosis and meiosis?
+          - solve this physics kinematics problem
+          - balance this chemical equation
+          - derive the quadratic formula
+          - قانون نیوتون دوم رو توضیح بده
+          - این مسئله فیزیک حرکت رو حل کن
+          - واکنش شیمیایی این ترکیب چیه؟
+
+      - name: trivia
+        threshold: 0.72
+        aggregation_method: max
+        candidates:
+          - tell me a fun fact about space
+          - quiz me on world capitals
+          - what are five interesting facts about dolphins?
+          - who invented the telephone?
+          - یک نکته جالب درباره تاریخ ایران بگو
+          - یک سوال تستی سخت درباره جغرافیا بپرس
+
+      - name: summarize
+        threshold: 0.74
+        aggregation_method: max
+        candidates:
+          - summarize this article in five bullet points
+          - give me a TLDR of the document below
+          - condense this meeting transcript into key takeaways
+          - summarize the main arguments in this essay
+          - این متن رو در چند نکته کلیدی خلاصه کن
+          - خلاصه مدیریتی این گزارش رو بنویس
 
       - name: chitchat
         threshold: 0.70
@@ -120,63 +227,13 @@ routing:
           - سلام، حالت خوبه؟
           - امروز چه خبر؟
           - یک جوک بگو
-          - خلاصه بگو
           - ممنون، فهمیدم
           - به فارسی یعنی چی؟
-          - یه متن کوتاه بنویس
           - در مورد خودت بگو
           - Hello, how are you?
           - tell me a joke
-          - give me a quick summary
           - write something casual
           - what can you do?
-
-      - name: reasoning_fa
-        threshold: 0.76
-        aggregation_method: max
-        candidates:
-          - گام به گام تحلیل کن و به نتیجه برس
-          - از چند زاویه مقایسه کن و trade-off ها رو بگو
-          - با استدلال منطقی ثابت کن
-          - علت اصلی این مشکل چیه؟ ریشه‌یابی کن
-          - چند راه‌حل ممکن رو بررسی کن و بهترین رو پیشنهاد بده
-          - این ایده رو از اول اصول بررسی کن
-          - مزایا و معایب هر گزینه رو با دلیل مقایسه کن
-          - یک تحلیل عمیق و چندلایه ارائه بده
-
-      - name: reasoning_en
-        threshold: 0.76
-        aggregation_method: max
-        candidates:
-          - solve this step by step with rigorous reasoning
-          - compare multiple approaches and explain the trade-offs
-          - analyze the root cause and propose the best solution
-          - evaluate several options and recommend one with justification
-          - reason from first principles and build a complete argument
-          - provide a deep multi-step analysis
-
-    complexity:
-      - name: hard_reasoning
-        threshold: 0.75
-        description: Escalate multi-step reasoning beyond simple chitchat or coding.
-        hard:
-          candidates:
-            - گام به گام تحلیل کن و نتیجه بگیر
-            - از چند زاویه مقایسه کن و trade-off ها رو توضیح بده
-            - با استدلال منطقی ثابت کن
-            - چند راه‌حل ممکن رو بررسی کن
-            - solve this step by step
-            - compare multiple approaches and tradeoffs
-            - analyze the root cause in depth
-        easy:
-          candidates:
-            - خلاصه بگو
-            - جواب کوتاه بده
-            - یک جمله‌ای توضیح بده
-            - سلام
-            - quick summary
-            - answer briefly
-            - hello
 
   decisions:
     - name: block_jailbreak
@@ -188,7 +245,7 @@ routing:
           - type: jailbreak
             name: default
       modelRefs:
-        - model: google/gemini-2.5-flash-lite
+        - model: google/gemini-3.1-flash-lite
           use_reasoning: false
       plugins:
         - type: system_prompt
@@ -205,37 +262,8 @@ routing:
             max_body_bytes: 4096
             max_records: 100000
 
-    - name: hard_coding_route
-      description: Architecture, complex debugging, and system design in code.
-      priority: 220
-      rules:
-        operator: AND
-        conditions:
-          - type: embedding
-            name: coding
-          - type: complexity
-            name: hard_reasoning
-      modelRefs:
-        - model: anthropic/claude-opus-4.6
-          use_reasoning: true
-          reasoning_effort: medium
-      plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: >
-              You are a senior software engineer. Reason carefully about
-              architecture, trade-offs, and failure modes. Respond in the
-              user's language (Farsi or English).
-        - type: router_replay
-          configuration:
-            enabled: true
-            capture_request_body: true
-            capture_response_body: true
-            max_body_bytes: 4096
-            max_records: 100000
-
     - name: coding_route
-      description: Routine programming, debugging, and implementation tasks.
+      description: Programming, debugging, and implementation tasks.
       priority: 200
       rules:
         operator: OR
@@ -245,9 +273,9 @@ routing:
           - type: keyword
             name: coding_markers
           - type: domain
-            name: "computer science"
+            name: computer science
       modelRefs:
-        - model: your-coding-model
+        - model: google/gemini-3.5-flash
           use_reasoning: false
       plugins:
         - type: system_prompt
@@ -264,30 +292,87 @@ routing:
             max_body_bytes: 4096
             max_records: 100000
 
-    - name: reasoning_route
-      description: Deep analysis, comparison, and multi-step reasoning.
+    - name: copywriting_route
+      description: Marketing copy, content writing, and persuasive text.
+      priority: 195
+      rules:
+        operator: OR
+        conditions:
+          - type: embedding
+            name: copywriting
+          - type: keyword
+            name: copywriting_markers
+      modelRefs:
+        - model: google/gemini-3.5-flash
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: >
+              You are a skilled copywriter. Write clear, engaging copy
+              tailored to the audience and channel. Respond in the user's
+              language (Farsi or English).
+        - type: router_replay
+          configuration:
+            enabled: true
+            capture_request_body: true
+            capture_response_body: true
+            max_body_bytes: 4096
+            max_records: 100000
+
+    - name: translate_route
+      description: Translation between languages.
       priority: 150
       rules:
         operator: OR
         conditions:
           - type: embedding
-            name: reasoning_fa
-          - type: embedding
-            name: reasoning_en
-          - type: complexity
-            name: hard_reasoning
+            name: translate
           - type: keyword
-            name: reasoning_markers
+            name: translate_markers
       modelRefs:
-        - model: anthropic/claude-opus-4.6
-          use_reasoning: true
-          reasoning_effort: high
+        - model: google/gemini-3.1-flash-lite
+          use_reasoning: false
       plugins:
         - type: system_prompt
           configuration:
             system_prompt: >
-              You are a careful reasoning assistant. Think step by step,
-              weigh trade-offs, and justify conclusions. Respond in the
+              You are a professional translator. Preserve meaning, tone,
+              and nuance. Respond with the translation only unless the
+              user asks for notes.
+        - type: router_replay
+          configuration:
+            enabled: true
+            capture_request_body: true
+            capture_response_body: true
+            max_body_bytes: 4096
+            max_records: 100000
+
+    - name: science_route
+      description: Science, math, and STEM explanations.
+      priority: 140
+      rules:
+        operator: OR
+        conditions:
+          - type: embedding
+            name: science
+          - type: domain
+            name: biology
+          - type: domain
+            name: chemistry
+          - type: domain
+            name: physics
+          - type: domain
+            name: math
+      modelRefs:
+        - model: google/gemini-3.1-flash-lite
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: >
+              You are a science tutor. Explain concepts accurately and
+              clearly, with steps when solving problems. Respond in the
               user's language (Farsi or English).
         - type: router_replay
           configuration:
@@ -297,13 +382,71 @@ routing:
             max_body_bytes: 4096
             max_records: 100000
 
-    - name: chitchat_default
-      description: Casual chat, simple Q&A, and fallback for unmatched traffic.
-      priority: 10
+    - name: trivia_route
+      description: Fun facts, quizzes, and lightweight knowledge questions.
+      priority: 130
       rules:
-        operator: AND
+        operator: OR
+        conditions:
+          - type: embedding
+            name: trivia
+          - type: keyword
+            name: trivia_markers
       modelRefs:
-        - model: google/gemini-2.5-flash-lite
+        - model: google/gemini-3.1-flash-lite
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: >
+              You are a friendly trivia assistant. Keep answers concise,
+              accurate, and engaging. Respond in the user's language.
+        - type: router_replay
+          configuration:
+            enabled: true
+            capture_request_body: true
+            capture_response_body: true
+            max_body_bytes: 4096
+            max_records: 100000
+
+    - name: summarize_route
+      description: Summaries, TLDRs, and key-point extraction.
+      priority: 120
+      rules:
+        operator: OR
+        conditions:
+          - type: embedding
+            name: summarize
+          - type: keyword
+            name: summarize_markers
+      modelRefs:
+        - model: google/gemini-3.1-flash-lite
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: >
+              You summarize content faithfully. Preserve facts, use clear
+              structure (bullets or short paragraphs), and omit fluff.
+              Respond in the user's language.
+        - type: router_replay
+          configuration:
+            enabled: true
+            capture_request_body: true
+            capture_response_body: true
+            max_body_bytes: 4096
+            max_records: 100000
+
+    - name: chitchat_route
+      description: Casual chat and simple conversational Q&A.
+      priority: 110
+      rules:
+        operator: OR
+        conditions:
+          - type: embedding
+            name: chitchat
+      modelRefs:
+        - model: google/gemini-3.1-flash-lite
           use_reasoning: false
       plugins:
         - type: system_prompt
@@ -311,6 +454,32 @@ routing:
             system_prompt: >
               You are a friendly assistant. Keep answers short and
               natural. Respond in the user's language (Farsi or English).
+        - type: semantic-cache
+          configuration:
+            enabled: true
+            similarity_threshold: 0.85
+        - type: router_replay
+          configuration:
+            enabled: true
+            capture_request_body: true
+            capture_response_body: true
+            max_body_bytes: 4096
+            max_records: 100000
+
+    - name: default_route
+      description: Fallback for unmatched traffic.
+      priority: 10
+      rules:
+        operator: AND
+      modelRefs:
+        - model: google/gemini-3.1-flash-lite
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: >
+              You are a helpful general assistant. Respond clearly in the
+              user's language (Farsi or English).
         - type: semantic-cache
           configuration:
             enabled: true
@@ -345,11 +514,3 @@ global:
           enabled: true
         pii:
           enabled: true
-      complexity:
-        prototype_scoring:
-          enabled: true
-          cluster_similarity_threshold: 0.9
-          max_prototypes: 8
-          best_weight: 0.75
-          top_m: 2
-          margin_threshold: 0.0
