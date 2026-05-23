@@ -21,7 +21,10 @@ providers:
         - name: gemini
           base_url: https://generativelanguage.googleapis.com/v1beta/openai
           provider: gemini
-          api_key_env: GEMINI_API_KEY
+          # Expand at credential lookup time via os.ExpandEnv, so the key
+          # is always read from the live process environment (not only once
+          # at config load like api_key_env).
+          api_key: ${GEMINI_API_KEY}
           weight: 100
 
     - name: gemini-3.5-flash
@@ -30,7 +33,7 @@ providers:
         - name: gemini
           base_url: https://generativelanguage.googleapis.com/v1beta/openai
           provider: gemini
-          api_key_env: GEMINI_API_KEY
+          api_key: ${GEMINI_API_KEY}
           weight: 100
 
 routing:
@@ -506,6 +509,15 @@ routing:
 
 global:
   services:
+    # Use static-config credentials only (no per-user header injection).
+    # fail_open: false rejects requests when GEMINI_API_KEY is missing instead
+    # of silently forwarding unauthenticated traffic to Gemini (which returns
+    # an empty-body HTTP 404). The envoy Lua filter strips client Authorization
+    # headers before ExtProc runs, so the router must inject the provider key.
+    authz:
+      fail_open: false
+      providers:
+        - type: static-config
     # The Coolify deployment only ships the router, envoy, and dashboard.
     # Override the default `postgres` and `redis` store backends so the
     # router does not crash trying to connect to services we do not run.
